@@ -25,9 +25,27 @@
             </div>
 
             <div class="page-links">
-                @foreach (var pageIndex in GetVisiblePageIndexes(catalogResult))
+                @if (catalogResult != null)
                 {
-                    <NavLink ActiveClass="active-page" Match="@NavLinkMatch.All" href="@Nav.GetUriWithQueryParameter("page", pageIndex == 1 ? null : pageIndex)">@pageIndex</NavLink>
+                    int currentPage = Page.GetValueOrDefault(1);
+                    int totalPages = (int)Math.Ceiling(1.0 * catalogResult.Count / PageSize);
+                    <NavLink ActiveClass="active-page" class="page-btn" Match="@NavLinkMatch.All" href="@Nav.GetUriWithQueryParameter("page", currentPage > 1 ? (currentPage - 1).ToString() : null)">
+                        &laquo;
+                    </NavLink>
+                    @foreach (var pageIndex in GetVisiblePageIndexes(catalogResult, currentPage))
+                    {
+                        if (pageIndex == null)
+                        {
+                            <span class="ellipsis">...</span>
+                        }
+                        else
+                        {
+                            <NavLink ActiveClass="active-page" class="page-btn" Match="@NavLinkMatch.All" href="@Nav.GetUriWithQueryParameter("page", pageIndex == 1 ? null : pageIndex.ToString())">@pageIndex</NavLink>
+                        }
+                    }
+                    <NavLink ActiveClass="active-page" class="page-btn" Match="@NavLinkMatch.All" href="@Nav.GetUriWithQueryParameter("page", currentPage < totalPages ? (currentPage + 1).ToString() : totalPages.ToString())">
+                        &raquo;
+                    </NavLink>
                 }
             </div>
         </div>
@@ -48,9 +66,39 @@
 
     CatalogResult? catalogResult;
 
-    static IEnumerable<int> GetVisiblePageIndexes(CatalogResult result)
-        => Enumerable.Range(1, (int)Math.Ceiling(1.0 * result.Count / PageSize));
+    /// <summary>
+    /// Returns a condensed list of visible page indexes for the paginator, including first, last, current, previous, and next pages, with ellipsis for skipped ranges.
+    /// </summary>
+    /// <param name="result">The catalog result containing the total item count.</param>
+    /// <param name="currentPage">The current page number (1-based).</param>
+    /// <returns>An enumerable of page indexes to display, with null representing an ellipsis.</returns>
+    static IEnumerable<int?> GetVisiblePageIndexes(CatalogResult result, int currentPage)
+    {
+        int totalPages = (int)Math.Ceiling(1.0 * result.Count / PageSize);
+        var pages = new List<int?>();
+        if (totalPages <= 7)
+        {
+            for (int i = 1; i <= totalPages; i++)
+                pages.Add(i);
+            return pages;
+        }
+        pages.Add(1); // Always show first page
+        if (currentPage > 3)
+            pages.Add(null); // Ellipsis
+        for (int i = Math.Max(2, currentPage - 1); i <= Math.Min(totalPages - 1, currentPage + 1); i++)
+        {
+            if (i != 1 && i != totalPages)
+                pages.Add(i);
+        }
+        if (currentPage < totalPages - 2)
+            pages.Add(null); // Ellipsis
+        pages.Add(totalPages); // Always show last page
+        return pages;
+    }
 
+    /// <summary>
+    /// Loads the catalog items for the current page and filter parameters when the component is initialized.
+    /// </summary>
     protected override async Task OnInitializedAsync()
     {
         catalogResult = await CatalogService.GetCatalogItems(
@@ -60,3 +108,41 @@
             ItemTypeId);
     }
 }
+
+<style>
+.page-links {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+.page-btn {
+    display: inline-block;
+    min-width: 2.5rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    text-align: center;
+    text-decoration: none;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+}
+.page-btn.active-page, .page-btn.active-page:visited {
+    background: #0078d4;
+    color: #fff;
+    border-color: #0078d4;
+}
+.page-btn:disabled, .page-btn[aria-disabled="true"] {
+    opacity: 0.5;
+    pointer-events: none;
+}
+.ellipsis {
+    padding: 0 0.5rem;
+    color: #888;
+    font-size: 1.2rem;
+}
+</style>
